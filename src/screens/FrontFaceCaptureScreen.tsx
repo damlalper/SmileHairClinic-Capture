@@ -17,17 +17,18 @@
  * ✅ 10. ADVANCED CAPTURE INTELLIGENCE - 7-condition validation
  */
 
-import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Dimensions, Vibration } from 'react-native';
-import { CameraView, FaceDetectionResult } from 'expo-camera';
+import { Camera, useCameraDevice, useFrameProcessor } from 'react-native-vision-camera';
+import { scanFaces, Face } from 'vision-camera-face-detector';
+import { runOnJS } from 'react-native-reanimated';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Haptics from 'expo-haptics';
 
 import { useAdvancedCapture } from '../hooks/useAdvancedCapture';
 import { CaptureAngle, RootStackParamList } from '../types';
-import { PhotoContext } from '../context/PhotoContext';
-import { DynamicFaceGuide } from '../components/DynamicFaceGuide';
+import DynamicFaceGuide from '../components/DynamicFaceGuide';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 

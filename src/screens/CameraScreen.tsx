@@ -224,7 +224,6 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
       setIsCapturing(true);
 
       const photo = await cameraRef.current.takePhoto({
-        qualityPrioritization: 'quality',
         flash: 'off',
       });
 

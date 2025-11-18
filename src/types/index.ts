@@ -72,8 +72,9 @@ export interface PositionValidation {
 export type RootStackParamList = {
   Welcome: undefined;
   Instructions: { angle: CaptureAngle };
-  Review: undefined; // Navigates to review all photos in context
-  Completion: undefined; // Navigates to the final completion screen
+  Camera: { angle: CaptureAngle };
+  Review: { photo: CapturedPhoto };
+  Completion: undefined;
   FrontFaceCapture: undefined;
   Left45Capture: undefined;
   Right45Capture: undefined;

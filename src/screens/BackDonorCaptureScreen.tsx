@@ -23,15 +23,14 @@ import {
   Vibration,
   Platform,
 } from 'react-native';
-import { CameraView } from 'expo-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 
 import { useAdvancedCapture } from '../hooks/useAdvancedCapture';
-import { DynamicFaceGuide } from '../components/DynamicFaceGuide';
+import DynamicFaceGuide from '../components/DynamicFaceGuide';
 import { CaptureAngle } from '../types';
-import { usePhotoContext } from '../context/PhotoContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -44,8 +43,8 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'BackDonorCa
 
 const BackDonorCaptureScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const cameraRef = useRef<any>(null);
-  const { addPhoto } = usePhotoContext();
+  const cameraRef = useRef<Camera>(null);
+  const device = useCameraDevice('back');
 
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -54,9 +53,6 @@ const BackDonorCaptureScreen = () => {
     isReadyToCapture,
     smartFeedback,
     validationState,
-    processFace,
-    reset,
-    headPose,
     phoneOrientation,
   } = useAdvancedCapture({
     captureAngle: CaptureAngle.BACK_DONOR,
@@ -125,10 +121,8 @@ const BackDonorCaptureScreen = () => {
     await triggerHaptic('success');
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        base64: false,
-        exif: true,
+      const photo = await cameraRef.current.takePhoto({
+        flash: 'off',
       });
 
       const distance = estimateSensorBasedDistance();
@@ -164,15 +158,19 @@ const BackDonorCaptureScreen = () => {
         phoneElevation: phoneOrientation?.pitch || 0, // Same as pitch for back donor
       };
 
-      addPhoto({
-        uri: photo.uri,
-        angle: CaptureAngle.BACK_DONOR,
-        timestamp: metadata.timestamp,
-        metadata,
+      // Navigate to review with photo data
+      navigation.navigate('Review', {
+        photo: {
+          uri: `file://${photo.path}`,
+          angle: CaptureAngle.BACK_DONOR,
+          timestamp: Date.now(),
+          metadata: {
+            pitch: phoneOrientation?.pitch || 0,
+            roll: phoneOrientation?.roll || 0,
+            distance,
+          },
+        },
       });
-
-      reset();
-      navigation.navigate('Review');
     } catch (error) {
       console.error('Back donor capture error:', error);
       await triggerHaptic('error');
@@ -223,21 +221,34 @@ const BackDonorCaptureScreen = () => {
     ? phoneOrientation.pitch > -85 || phoneOrientation.pitch < -100
     : false;
 
+  if (!device) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading camera...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <CameraView
+      <Camera
         style={styles.camera}
-        facing="back"
+        device={device}
+        isActive={true}
         ref={cameraRef}
-        enableTorch={false}
-        zoom={0}
+        photo={true}
       />
 
       {/* Dynamic Face Guide Overlay - for Back Donor we show neck/donor area target */}
       <DynamicFaceGuide
-        bounds={null} // No face bounds in Back Donor
-        validationState={validationState}
-        isStable={isReadyToCapture}
+        width={SCREEN_WIDTH * 0.7}
+        height={SCREEN_WIDTH * 0.9}
+        pitch={phoneOrientation?.pitch || 0}
+        roll={phoneOrientation?.roll || 0}
+        yaw={phoneOrientation?.yaw || 0}
+        accuracy={validationState?.angleAccuracy || 0}
+        isValid={isReadyToCapture}
+        countdown={null}
       />
 
       {/* Header */}

@@ -22,7 +22,7 @@ import {
   Vibration,
   Platform,
 } from 'react-native';
-import { CameraView } from 'expo-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
