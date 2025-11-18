@@ -1,0 +1,2 @@
+This is a placeholder. You need to add an actual beep sound file here.
+For now, we'll use expo-av to generate a beep sound programmatically.
