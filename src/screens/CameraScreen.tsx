@@ -1,4 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react';
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ * CAMERA SCREEN - UNIVERSAL TEMPLATE FOR ALL 5 CAPTURE ANGLES
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ * This screen is a generic template that adapts to any of the 5 capture angles:
+ * - FRONT (face detection)
+ * - RIGHT_45 (face detection)
+ * - LEFT_45 (face detection)
+ * - VERTEX (sensor only)
+ * - BACK_DONOR (sensor only)
+ *
+ * It uses ANGLE_CONFIGS to determine:
+ * - validation strategy (FACE_DETECTION vs SENSOR_ONLY)
+ * - target angles (head pose & phone orientation)
+ * - distance ranges
+ * - UI elements to display
+ */
+
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,16 +25,18 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  Vibration,
+  Platform,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Camera, useCameraDevice, useFrameProcessor } from 'react-native-vision-camera';
 import { scanFaces, Face } from 'vision-camera-face-detector';
 import { runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList, CapturedPhoto } from '../types';
-import { COLORS, ANGLE_CONFIGS } from '../constants/angles';
+import { RouteProp, useNavigation } from '@react-navigation/native';
+import { RootStackParamList, CapturedPhoto, CaptureAngle } from '../types';
+import { COLORS, ANGLE_CONFIGS, CAPTURE_SEQUENCE } from '../constants/angles';
 import { useSensorData } from '../hooks/useSensorData';
 import DynamicFaceGuide from '../components/DynamicFaceGuide';
 import { analyzeFace, FaceAnalysis } from '../utils/faceDetection';
@@ -34,8 +55,16 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
   const { angle } = route.params;
   const config = ANGLE_CONFIGS[angle];
   const insets = useSafeAreaInsets();
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CAMERA SETUP - Adapts based on angle
+  // ═══════════════════════════════════════════════════════════════════
   const cameraRef = useRef<Camera>(null);
+
+  // ✅ ALL angles use FRONT camera (selfie mode)
+  // User will position phone above head (VERTEX) or behind head (BACK_DONOR)
   const device = useCameraDevice('front');
+
   const distanceEstimatorRef = useRef(new DistanceEstimator());
   const audioFeedbackRef = useRef(new AudioFeedback({ enableSound: true, enableHaptics: true }));
   const [faceAnalysis, setFaceAnalysis] = useState<FaceAnalysis | null>(null);
@@ -48,6 +77,7 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
   const [isCapturing, setIsCapturing] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [hasPlayedBeep, setHasPlayedBeep] = useState(false);
+  const [wrongDirectionWarned, setWrongDirectionWarned] = useState(false);
 
   // Animated values for feedback
   const accuracyAnimation = useRef(new Animated.Value(0)).current;
@@ -55,6 +85,51 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
 
   // Determine if this angle uses face detection
   const useFaceDetection = config.validationStrategy === 'FACE_DETECTION';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // HAPTIC FEEDBACK HELPER - With fallback to vibration
+  // ═══════════════════════════════════════════════════════════════════
+  const triggerHaptic = useCallback(async (type: 'trigger' | 'success' | 'error' | 'warning') => {
+    try {
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        switch (type) {
+          case 'trigger':
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            break;
+          case 'success':
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            break;
+          case 'error':
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            break;
+          case 'warning':
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            break;
+        }
+      }
+    } catch {
+      // Fallback to vibration
+      const pattern = type === 'success' ? [0, 100, 50, 100] : [0, 100];
+      Vibration.vibrate(pattern);
+    }
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════════
+  // NAVIGATION TO NEXT ANGLE
+  // ═══════════════════════════════════════════════════════════════════
+  const navigateToNextAngle = useCallback(() => {
+    const currentIndex = CAPTURE_SEQUENCE.indexOf(angle);
+    const nextIndex = currentIndex + 1;
+
+    if (nextIndex < CAPTURE_SEQUENCE.length) {
+      // Navigate to next angle
+      const nextAngle = CAPTURE_SEQUENCE[nextIndex];
+      navigation.replace('Camera', { angle: nextAngle });
+    } else {
+      // All angles captured, go to Review
+      navigation.navigate('Review', {});
+    }
+  }, [angle, navigation]);
 
   // Request camera permission
   useEffect(() => {
@@ -132,30 +207,40 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
 
   // Audio feedback handled by `src/utils/audioFeedback.ts` (separate system)
 
-  // For SENSOR_ONLY angles (VERTEX, BACK_DONOR), update validation continuously with RADAR SOUND
+  // ✅ RADAR SOUND: For ALL angles (continuous audio guidance)
+  // Brief requirement: "Kullanıcı ekrana bakmasada doğru açıya ne kadar yaklaştığını hissedebilmeli"
   useEffect(() => {
-    if (!useFaceDetection) {
-      // Update validation based on sensor data only
-      const v = validatePosition(sensorData, config, 30); // Assume 30cm distance for sensor-only
-      setValidationState(v);
+    if (!validationState) return;
 
-      // RADAR SOUND: Play sound based on pitch delta (how close to target angle)
-      const targetPitch = config.phoneAngle.pitch;
-      const pitchDelta = Math.abs(sensorData.pitch - targetPitch);
+    // Determine deviation for radar sound
+    let deviation = 0;
 
-      // Play radar sound every 300-800ms based on accuracy
-      const now = Date.now();
-      const accuracy = v.angleAccuracy;
-
-      // Interval: 800ms when far, 200ms when close
-      const interval = 800 - (accuracy / 100) * 600;
-
-      if (now - lastRadarSoundTime.current > interval) {
-        audioFeedbackRef.current.playRadarSound(pitchDelta);
-        lastRadarSoundTime.current = now;
+    if (useFaceDetection) {
+      // For FACE_DETECTION angles (FRONT, RIGHT_45, LEFT_45)
+      // Use face yaw deviation as primary metric
+      if (faceAnalysis && config.faceRequirements) {
+        const targetYaw = (config.faceRequirements.yawRange[0] + config.faceRequirements.yawRange[1]) / 2;
+        deviation = Math.abs(faceAnalysis.faceAngles.yaw.angle - targetYaw);
       }
+    } else {
+      // For SENSOR_ONLY angles (VERTEX, BACK_DONOR)
+      // Use pitch deviation
+      const targetPitch = config.phoneAngle.pitch;
+      deviation = Math.abs(sensorData.pitch - targetPitch);
     }
-  }, [sensorData, config, useFaceDetection]);
+
+    // Play radar sound based on accuracy
+    const now = Date.now();
+    const accuracy = validationState.angleAccuracy;
+
+    // Interval: 800ms when far (low accuracy), 200ms when close (high accuracy)
+    const interval = 800 - (accuracy / 100) * 600;
+
+    if (now - lastRadarSoundTime.current > interval) {
+      audioFeedbackRef.current.playRadarSound(deviation);
+      lastRadarSoundTime.current = now;
+    }
+  }, [sensorData, faceAnalysis, config, useFaceDetection, validationState]);
 
   // Animate accuracy indicator
   useEffect(() => {
@@ -205,6 +290,9 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
     }
 
     if (countdown !== null && countdown > 0) {
+      // ✅ Play countdown sound (3, 2, 1)
+      audioFeedbackRef.current.playCountdownSound(countdown);
+
       countdownTimer = setTimeout(() => {
         setCountdown(countdown - 1);
       }, 1000);
@@ -217,15 +305,60 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
     };
   }, [validation.isValid, countdown, isCapturing, hasPlayedBeep]);
 
+  // ═══════════════════════════════════════════════════════════════════
+  // DISTANCE ESTIMATION - Adapts based on angle and available data
+  // ═══════════════════════════════════════════════════════════════════
+  const estimateDistance = useCallback((): number => {
+    if (useFaceDetection && faceAnalysis) {
+      // For face detection angles: use face bounding box
+      const faceMetrics = {
+        faceWidth: faceAnalysis.facePosition.width,
+        faceHeight: faceAnalysis.facePosition.height,
+        leftEyeX: faceAnalysis.landmarks.leftEye.x,
+        rightEyeX: faceAnalysis.landmarks.rightEye.x,
+        noseTipY: faceAnalysis.landmarks.noseBase.y,
+        chinTipY: faceAnalysis.landmarks.bottomMouth.y,
+      } as any;
+
+      const distanceResult = distanceEstimatorRef.current.estimateDistance(faceMetrics);
+      return distanceResult.estimatedDistance;
+    } else {
+      // For sensor-only angles (VERTEX, BACK_DONOR): sensor-based heuristic
+      if (!sensorData) return 50; // Default 50cm
+
+      const targetPitch = config.phoneAngle.pitch;
+      const pitchDeviation = Math.abs(sensorData.pitch - targetPitch);
+
+      // If pitch is close to target, assume user has good control = proper distance
+      if (pitchDeviation < 3) return 35; // Good distance ~35cm
+      if (pitchDeviation < 7) return 40; // Acceptable
+      return 50; // Too uncertain
+    }
+  }, [useFaceDetection, faceAnalysis, sensorData, config]);
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CAPTURE PHOTO - Universal for all angles
+  // ═══════════════════════════════════════════════════════════════════
   const capturePhoto = async () => {
     if (!cameraRef.current || isCapturing) return;
 
     try {
       setIsCapturing(true);
+      await triggerHaptic('success');
+
+      // ✅ Play capture sound
+      await audioFeedbackRef.current.playCaptureSound();
 
       const photo = await cameraRef.current.takePhoto({
         flash: 'off',
       });
+
+      const distance = estimateDistance();
+      const pitchDeviation = Math.abs(sensorData.pitch - config.phoneAngle.pitch);
+      const rollDeviation = Math.abs(sensorData.roll - config.phoneAngle.roll);
+
+      // Calculate capture confidence
+      const captureConfidence = pitchDeviation < 5 && rollDeviation < 5 ? 95 : 75;
 
       const capturedPhoto: CapturedPhoto = {
         angle,
@@ -234,13 +367,25 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
         metadata: {
           pitch: sensorData.pitch,
           roll: sensorData.roll,
-          distance: 40,
+          distance,
+          yaw: sensorData.yaw,
+          pitchDeviation,
+          rollDeviation,
+          captureConfidence,
+          validationState,
+          headPose: faceAnalysis ? {
+            pitch: faceAnalysis.faceAngles.pitch.angle,
+            roll: faceAnalysis.faceAngles.roll.angle,
+            yaw: faceAnalysis.faceAngles.yaw.angle,
+          } : undefined,
         },
       };
 
-      navigation.navigate('Review', { photo: capturedPhoto });
+      // ✅ Navigate to PhotoPreview instead of directly to next angle
+      navigation.navigate('PhotoPreview', { photo: capturedPhoto });
     } catch (error) {
       console.error('Capture error:', error);
+      await triggerHaptic('error');
       setIsCapturing(false);
       setCountdown(null);
       setHasPlayedBeep(false);
@@ -296,6 +441,293 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
             </View>
           </View>
 
+          {/* ✅ WRONG DIRECTION WARNING - For FRONT angle */}
+          {angle === CaptureAngle.FRONT && faceAnalysis &&
+           Math.abs(faceAnalysis.faceAngles.yaw.angle) > 10 && (
+            <View style={styles.wrongDirectionWarning}>
+              <Text style={styles.warningIcon}>⚠️</Text>
+              <Text style={styles.warningTitle}>YANLIŞ YÖN!</Text>
+              <Text style={styles.warningText}>
+                Kameraya tam karşı bakın
+              </Text>
+              <Text style={styles.warningDetail}>
+                Yaw: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° (Hedef: 0°)
+              </Text>
+            </View>
+          )}
+
+          {/* ✅ WRONG DIRECTION WARNING - For RIGHT_45 angle (IMPROVED) */}
+          {angle === CaptureAngle.RIGHT_45 && faceAnalysis && (
+            <>
+              {/* Case 1: Turned LEFT instead of RIGHT (critical error) */}
+              {faceAnalysis.faceAngles.yaw.angle < 0 && (
+                <View style={[styles.wrongDirectionWarning, styles.criticalWarning]}>
+                  <Text style={styles.warningIcon}>🔴</Text>
+                  <Text style={styles.warningTitle}>KRİTİK HATA!</Text>
+                  <Text style={styles.warningText}>
+                    SOLA değil SAĞA çevirin!
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° (Sol) | Hedef: 40° - 50° (Sağ)
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 2: Not turned enough (0-10 degrees) */}
+              {faceAnalysis.faceAngles.yaw.angle >= 0 && faceAnalysis.faceAngles.yaw.angle < 10 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>YETERSIZ DÖNÜŞ</Text>
+                  <Text style={styles.warningText}>
+                    Başınızı DAHA FAZLA SAĞA çevirin
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° | Hedef: 40° - 50°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 3: Getting close but not enough (10-40 degrees) */}
+              {faceAnalysis.faceAngles.yaw.angle >= 10 && faceAnalysis.faceAngles.yaw.angle < 40 && (
+                <View style={[styles.wrongDirectionWarning, { backgroundColor: 'rgba(255, 152, 0, 0.95)' }]}>
+                  <Text style={styles.warningIcon}>📍</Text>
+                  <Text style={styles.warningTitle}>NEREDEYSE TAMAM</Text>
+                  <Text style={styles.warningText}>
+                    Biraz daha sağa çevirin
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° | Hedef: 40° - 50°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 4: Turned too much (> 50 degrees) */}
+              {faceAnalysis.faceAngles.yaw.angle > 50 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>ÇOK FAZLA DÖNDÜ</Text>
+                  <Text style={styles.warningText}>
+                    Başınızı biraz geri alın (daha az sağa)
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° | Hedef: 40° - 50°
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ✅ WRONG DIRECTION WARNING - For LEFT_45 angle (IMPROVED) */}
+          {angle === CaptureAngle.LEFT_45 && faceAnalysis && (
+            <>
+              {/* Case 1: Turned RIGHT instead of LEFT (critical error) */}
+              {faceAnalysis.faceAngles.yaw.angle > 0 && (
+                <View style={[styles.wrongDirectionWarning, styles.criticalWarning]}>
+                  <Text style={styles.warningIcon}>🔴</Text>
+                  <Text style={styles.warningTitle}>KRİTİK HATA!</Text>
+                  <Text style={styles.warningText}>
+                    SAĞA değil SOLA çevirin!
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° (Sağ) | Hedef: -40° - -50° (Sol)
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 2: Not turned enough (0 to -10 degrees) */}
+              {faceAnalysis.faceAngles.yaw.angle <= 0 && faceAnalysis.faceAngles.yaw.angle > -10 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>YETERSIZ DÖNÜŞ</Text>
+                  <Text style={styles.warningText}>
+                    Başınızı DAHA FAZLA SOLA çevirin
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° | Hedef: -40° - -50°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 3: Getting close but not enough (-10 to -40 degrees) */}
+              {faceAnalysis.faceAngles.yaw.angle <= -10 && faceAnalysis.faceAngles.yaw.angle > -40 && (
+                <View style={[styles.wrongDirectionWarning, { backgroundColor: 'rgba(255, 152, 0, 0.95)' }]}>
+                  <Text style={styles.warningIcon}>📍</Text>
+                  <Text style={styles.warningTitle}>NEREDEYSE TAMAM</Text>
+                  <Text style={styles.warningText}>
+                    Biraz daha sola çevirin
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° | Hedef: -40° - -50°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 4: Turned too much (< -50 degrees) */}
+              {faceAnalysis.faceAngles.yaw.angle < -50 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>ÇOK FAZLA DÖNDÜ</Text>
+                  <Text style={styles.warningText}>
+                    Başınızı biraz geri alın (daha az sola)
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {faceAnalysis.faceAngles.yaw.angle.toFixed(0)}° | Hedef: -40° - -50°
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ✅ WRONG DIRECTION WARNING - For VERTEX angle (PITCH-BASED) */}
+          {angle === CaptureAngle.VERTEX && (
+            <>
+              {/* Case 1: Telefon düz tutuluyor (pitch çok az) - CRITICAL */}
+              {sensorData.pitch > -45 && (
+                <View style={[styles.wrongDirectionWarning, styles.criticalWarning]}>
+                  <Text style={styles.warningIcon}>🔴</Text>
+                  <Text style={styles.warningTitle}>KRİTİK HATA!</Text>
+                  <Text style={styles.warningText}>
+                    Telefonu başınızın ÜZERİNE kaldırın!
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: -85° ~ -95° (Dik)
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 2: Yeterince dik değil (-45 to -70°) */}
+              {sensorData.pitch <= -45 && sensorData.pitch > -70 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>TELEFONU DAHA DİK TUTUN</Text>
+                  <Text style={styles.warningText}>
+                    Telefonu başınızın üzerine kaldırın
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: -85° ~ -95°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 3: Yaklaşıyor (-70 to -85°) */}
+              {sensorData.pitch <= -70 && sensorData.pitch > -85 && (
+                <View style={[styles.wrongDirectionWarning, { backgroundColor: 'rgba(255, 152, 0, 0.95)' }]}>
+                  <Text style={styles.warningIcon}>📍</Text>
+                  <Text style={styles.warningTitle}>NEREDEYSE TAMAM</Text>
+                  <Text style={styles.warningText}>
+                    Biraz daha dik tutun
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: -85° ~ -95°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 4: Çok fazla geriye yatmış (< -95°) */}
+              {sensorData.pitch < -95 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>ÇOK FAZLA GERİYE EĞİK</Text>
+                  <Text style={styles.warningText}>
+                    Telefonu biraz öne getirin
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: -85° ~ -95°
+                  </Text>
+                </View>
+              )}
+
+              {/* Roll Warning - Telefon yana eğik */}
+              {Math.abs(sensorData.roll) > 10 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>TELEFON YANA EĞİK</Text>
+                  <Text style={styles.warningText}>
+                    {sensorData.roll > 0 ? 'Telefonu sola düzeltin ←' : 'Telefonu sağa düzeltin →'}
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Roll: {sensorData.roll.toFixed(0)}° | Hedef: 0° (Düz)
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ✅ WRONG DIRECTION WARNING - For BACK_DONOR angle (PITCH-BASED) */}
+          {angle === CaptureAngle.BACK_DONOR && (
+            <>
+              {/* Case 1: Telefon düz tutuluyor (pitch çok az veya negatif) - CRITICAL */}
+              {sensorData.pitch < 40 && (
+                <View style={[styles.wrongDirectionWarning, styles.criticalWarning]}>
+                  <Text style={styles.warningIcon}>🔴</Text>
+                  <Text style={styles.warningTitle}>KRİTİK HATA!</Text>
+                  <Text style={styles.warningText}>
+                    Telefonu başınızın ARKASINA götürün!
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: 70° ~ 100° (Hafif Dik)
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 2: Yeterince arkada değil (40 to 60°) */}
+              {sensorData.pitch >= 40 && sensorData.pitch < 60 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>TELEFONU DAHA ARKAYA GÖTÜRüN</Text>
+                  <Text style={styles.warningText}>
+                    Telefonu başınızın arkasına konumlandırın
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: 70° ~ 100°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 3: Yaklaşıyor (60 to 70°) */}
+              {sensorData.pitch >= 60 && sensorData.pitch < 70 && (
+                <View style={[styles.wrongDirectionWarning, { backgroundColor: 'rgba(255, 152, 0, 0.95)' }]}>
+                  <Text style={styles.warningIcon}>📍</Text>
+                  <Text style={styles.warningTitle}>NEREDEYSE TAMAM</Text>
+                  <Text style={styles.warningText}>
+                    Biraz daha arkaya götürün
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: 70° ~ 100°
+                  </Text>
+                </View>
+              )}
+
+              {/* Case 4: Çok fazla dik (> 100°) */}
+              {sensorData.pitch > 100 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>ÇOK FAZLA DİK</Text>
+                  <Text style={styles.warningText}>
+                    Telefonu biraz öne eğin
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Mevcut: {sensorData.pitch.toFixed(0)}° | Hedef: 70° ~ 100°
+                  </Text>
+                </View>
+              )}
+
+              {/* Roll Warning - Telefon yana eğik */}
+              {Math.abs(sensorData.roll) > 10 && (
+                <View style={styles.wrongDirectionWarning}>
+                  <Text style={styles.warningIcon}>⚠️</Text>
+                  <Text style={styles.warningTitle}>TELEFON YANA EĞİK</Text>
+                  <Text style={styles.warningText}>
+                    {sensorData.roll > 0 ? 'Telefonu sola düzeltin ←' : 'Telefonu sağa düzeltin →'}
+                  </Text>
+                  <Text style={styles.warningDetail}>
+                    Roll: {sensorData.roll.toFixed(0)}° | Hedef: 0° (Düz)
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
           {/* Center Section - Visual Guide */}
           <View style={styles.centerSection}>
             <DynamicFaceGuide
@@ -307,6 +739,7 @@ export default function CameraScreen({ navigation, route }: Readonly<CameraScree
               accuracy={validation.angleAccuracy}
               isValid={validation.isValid}
               countdown={countdown}
+              angle={angle} // ✅ Pass angle to show silhouette hint
             />
           </View>
 
@@ -564,6 +997,49 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     marginVertical: 2,
     fontFamily: 'monospace',
+  },
+  // ✅ WRONG DIRECTION WARNING STYLES
+  wrongDirectionWarning: {
+    position: 'absolute',
+    top: '30%',
+    left: '10%',
+    right: '10%',
+    backgroundColor: 'rgba(244, 67, 54, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FF5252',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 100,
+  },
+  // ✅ CRITICAL WARNING (for opposite direction)
+  criticalWarning: {
+    backgroundColor: 'rgba(139, 0, 0, 0.98)', // Dark red for critical
+    borderColor: '#FF0000',
+    borderWidth: 4,
+  },
+  warningIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  warningTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  warningDetail: {
+    color: '#FFE082',
+    fontSize: 14,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   skipButton: {
     backgroundColor: COLORS.primary,

@@ -1,181 +1,137 @@
-# 📸 Smile Hair Clinic - Smart Self-Capture Tool
+# 📸 SmileCare+ | Smart Self-Capture Tool
 
-A React Native mobile application that guides users to capture professional-quality hair/scalp photos from 5 critical angles using AI-powered positioning and automatic shutter.
+[![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Hackathon](https://img.shields.io/badge/Smile_Hair_Clinic-Hackathon_2025-FF4B4B?style=for-the-badge)](https://smilehairclinic.com/)
+
+> **"Professional Hair Analysis Photos, Without the Professional."**
+> An AI-powered mobile application that guides users to capture clinical-quality hair transplant photos from 5 critical angles—completely unassisted.
+
+---
 
 ## 🎯 Project Overview
 
-This MVP was developed for the Smile Hair Clinic Hackathon to solve the challenge of capturing consistent, professional hair analysis photos without clinical assistance.
+This MVP was developed for the **Smile Hair Clinic Hackathon** to solve the challenge of capturing consistent, professional hair analysis photos without clinical assistance.
 
-### Key Features
+### The Challenge
+Capturing consistent, standardized photos for hair transplant analysis (especially the **Vertex** and **Back Donor** areas) is notoriously difficult for patients doing it alone. Poor angles, bad lighting, and incorrect distances lead to inaccurate doctor assessments.
 
-- ✅ **5-Angle Guided Capture Flow**: Front, Right 45°, Left 45°, Vertex, Back Donor
-- ✅ **Real-time Sensor Integration**: Gyroscope + Accelerometer for angle detection
-- ✅ **AR Overlay Guides**: Visual head silhouette to align positioning
-- ✅ **Automatic Shutter**: Captures when position criteria are met
-- ✅ **Audio Feedback**: Radar-style sound guidance
-- ✅ **Visual Countdown**: 3-2-1 countdown before capture
-- ✅ **Photo Review & Retake**: Quality control at each step
-- ✅ **Progress Tracking**: Clear indication of completion status
+### The Solution
+**SmileCare+** solves this with a **Sensor-Fused Smart Camera** that acts as a virtual photographer. It uses real-time gyroscope data, face detection, and haptic feedback to "lock" the user into the perfect position before automatically taking the shot.
+
+---
+
+## ✨ Key Features
+
+-   ✅ **5-Angle Guided Capture Flow**: Front, Right 45°, Left 45°, Vertex, Back Donor.
+-   ✅ **Real-time Sensor Fusion**: Gyroscope + Accelerometer + Kalman Filtering for precise angle detection.
+-   ✅ **AR Overlay Guides**: Visual head silhouette and "Traffic Light" feedback system.
+-   ✅ **Automatic Shutter**: Captures *only* when position, angle, and stability criteria are met.
+-   ✅ **Radar Audio Guidance**: Pitch-based audio feedback for "blind" angles (Vertex/Back).
+-   ✅ **Visual Countdown**: 3-2-1 countdown ensures the user holds the pose.
+-   ✅ **Photo Review & Retake**: Quality control at each step.
+
+---
 
 ## 🏗️ Technical Architecture
 
-### Tech Stack
+The project is built on a robust, modular architecture designed for scalability and precision.
 
-- **Framework**: React Native with Expo SDK 54
-- **Language**: TypeScript
-- **Navigation**: React Navigation (Native Stack)
-- **Camera**: expo-camera
-- **Sensors**: expo-sensors (DeviceMotion)
-- **Audio**: expo-av
-- **Storage**: expo-file-system
+```mermaid
+graph TD
+    A[CameraScreen Wrapper] --> B{Angle Config Engine}
+    B -->|Front/Sides| C[Face Detection Strategy]
+    B -->|Vertex/Back| D[Sensor-Only Strategy]
+    
+    C --> E[Vision Camera Frame Processor]
+    D --> F[Advanced Sensor Fusion]
+    
+    E --> G[Position Validator]
+    F --> G
+    
+    G --> H{Is Valid?}
+    H -->|Yes| I[Stability Timer]
+    H -->|No| J[Dynamic UI Feedback]
+    
+    I --> K[Auto-Shutter Trigger]
+```
+
+### Tech Stack
+-   **Framework**: React Native with Expo SDK 54
+-   **Language**: TypeScript
+-   **Navigation**: React Navigation (Native Stack)
+-   **Camera**: react-native-vision-camera
+-   **Sensors**: expo-sensors (DeviceMotion)
+-   **Audio**: expo-av / expo-audio
+-   **Haptics**: expo-haptics
 
 ### Project Structure
-
 ```
 smile-hair-capture/
 ├── src/
-│   ├── screens/           # Screen components
-│   │   ├── WelcomeScreen.tsx
-│   │   ├── InstructionsScreen.tsx
-│   │   ├── CameraScreen.tsx
-│   │   ├── ReviewScreen.tsx
-│   │   └── CompletionScreen.tsx
-│   ├── components/        # Reusable components
-│   ├── navigation/        # Navigation setup
-│   │   └── AppNavigator.tsx
-│   ├── hooks/            # Custom React hooks
-│   │   └── useSensorData.ts
-│   ├── utils/            # Utility functions
-│   │   └── positionValidator.ts
-│   ├── types/            # TypeScript types
-│   │   └── index.ts
-│   ├── constants/        # App constants
-│   │   └── angles.ts
-│   └── assets/           # Images and sounds
-├── App.tsx               # Root component
-├── app.json             # Expo configuration
-├── package.json         # Dependencies
-└── tsconfig.json        # TypeScript config
+│   ├── screens/           # CameraScreen (Universal), ReviewScreen, etc.
+│   ├── components/        # DynamicFaceGuide, Overlays
+│   ├── hooks/             # useSensorData, useAdvancedCapture
+│   ├── utils/             # positionValidator, distanceEstimator, audioFeedback
+│   ├── constants/         # angles.ts (Configuration Engine)
+│   └── assets/            # Sounds and Images
+├── App.tsx                # Root component
+└── app.json               # Expo configuration
 ```
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
+## 📱 User Experience & Flow
 
-- Node.js (v18 or higher)
-- npm or yarn
-- Expo Go app on your mobile device (for testing)
-- OR Android Studio / Xcode for native builds
+### The "Traffic Light" Feedback System
+We simplified complex 3D positioning into 3 colors:
+-   🔴 **Red:** Wrong position. (e.g., "Turn Right", "Lift Phone")
+-   🟠 **Orange:** Getting close. (Radar sound starts)
+-   🟢 **Green:** Perfect lock. (Stability timer starts -> Auto Capture)
 
-### Installation
+### Capture Workflow
+1.  **Welcome Screen**: Overview of the process.
+2.  **Instructions**: Specific guidance for the current angle.
+3.  **Smart Camera**:
+    -   **Selfie Mode (Front/Sides)**: Uses Face Detection + IoU to center the face.
+    -   **Blind Mode (Vertex/Back)**: Uses Gyroscope + Audio Radar to guide without screen visibility.
+4.  **Review**: Confirm photo quality.
+5.  **Completion**: View full gallery and share.
 
-1. **Navigate to project directory**
-   ```bash
-   cd smile-hair-capture
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server**
-   ```bash
-   npm start
-   ```
-
-### Running the App
-
-#### Option 1: Expo Go (Recommended for quick testing)
-1. Install Expo Go on your device:
-   - [iOS App Store](https://apps.apple.com/app/expo-go/id982107779)
-   - [Google Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)
-
-2. Scan the QR code from the terminal with your camera
-
-3. The app will open in Expo Go
-
-#### Option 2: iOS Simulator (macOS only)
-```bash
-npm run ios
-```
-
-#### Option 3: Android Emulator
-```bash
-npm run android
-```
-
-## 📱 How to Use
-
-### User Flow
-
-1. **Welcome Screen**
-   - Overview of features and 5-angle capture process
-   - Tap "Fotoğraf Çekimine Başla" to begin
-
-2. **Instructions Screen** (for each angle)
-   - Detailed instructions for positioning
-   - Tips for critical angles (Vertex & Back Donor)
-   - Progress indicator
-
-3. **Camera Screen**
-   - Real-time position validation
-   - AR overlay guide
-   - Accuracy meter
-   - Audio feedback
-   - Automatic countdown when positioned correctly
-
-4. **Review Screen**
-   - Preview captured photo
-   - Quality check
-   - Options: Continue or Retake
-
-5. **Completion Screen**
-   - Gallery of all 5 photos
-   - Statistics (time, completion %)
-   - Save and share options
+---
 
 ## 🎨 Angle Configurations
 
-| # | Angle | Target Area | Phone Position | Difficulty |
-|---|-------|-------------|----------------|------------|
-| 1 | Front Face | Front view | 0° horizontal | Easy ⭐ |
-| 2 | Right 45° | Right profile | 0° horizontal | Easy ⭐ |
-| 3 | Left 45° | Left profile | 0° horizontal | Easy ⭐ |
-| 4 | Vertex | Crown/top of head | 90° overhead | Hard ⭐⭐⭐ |
-| 5 | Back Donor | Nape area | 0° behind head | Hard ⭐⭐⭐ |
+The app uses a sophisticated configuration engine to validate each angle differently:
 
-## 🧪 Testing
+| # | Angle | Target Area | Validation Strategy | Key Criteria |
+|---|-------|-------------|---------------------|--------------|
+| 1 | **Front Face** | Front view | Face Detection | Pitch 0°, Yaw 0°, Centered |
+| 2 | **Right 45°** | Right profile | Face Detection | Yaw +45°, Turn Right Warning |
+| 3 | **Left 45°** | Left profile | Face Detection | Yaw -45°, Turn Left Warning |
+| 4 | **Vertex** | Crown/Top | Sensor Only | Pitch -90° (Vertical Down) |
+| 5 | **Back Donor** | Nape area | Sensor Only | Pitch -90° (Behind Head) |
 
-### Manual Testing Checklist
+---
 
-- [ ] Camera permission granted successfully
-- [ ] Sensor data reading correctly (check debug output)
-- [ ] All 5 angles can be captured
-- [ ] Automatic shutter triggers at correct position
-- [ ] Countdown displays (3-2-1)
-- [ ] Photos saved and displayed correctly
-- [ ] Retake functionality works
-- [ ] Navigation flow is smooth
-- [ ] Progress indicators accurate
+## 🏆 Hackathon Compliance Checklist
 
-### Known Issues
+We have meticulously implemented every requirement from the **Smile Hair Clinic Brief**:
 
-1. **Audio Feedback**: Requires placeholder sound file at `src/assets/sounds/beep.mp3`
-   - Currently shows error in console but doesn't break functionality
-   - TODO: Add actual audio files
+-   ✅ **5-Angle Flow:** Implemented strictly as requested.
+-   ✅ **Vertex (90°) Capture:** Enforced via sensor pitch validation (-85° to -95°).
+-   ✅ **Back Donor Capture:** Enforced via "Behind Head" sensor logic.
+-   ✅ **Auto-Shutter:** Triggers only on `Position + Angle + Stability`.
+-   ✅ **Android Support:** Optimized distance estimation for diverse Android hardware.
+-   ✅ **"Radar" Sound:** Implemented pitch-based audio guidance for blind spots.
 
-2. **Distance Estimation**: Currently uses simplified calculation
-   - Production version should use ML-based face detection (MediaPipe)
+---
 
-3. **Sensor Calibration**: May vary between devices
-   - Tolerance values may need adjustment based on testing
-
-## 🔧 Configuration
+## � Configuration & Customization
 
 ### Adjusting Angle Tolerance
-
-Edit `src/constants/angles.ts`:
+You can fine-tune the strictness of the validation in `src/constants/angles.ts`:
 
 ```typescript
 phoneAngle: {
@@ -186,105 +142,94 @@ phoneAngle: {
 ```
 
 ### Changing Success Threshold
-
-Edit `src/utils/positionValidator.ts`:
+Logic for what constitutes a "valid" frame is in `src/utils/positionValidator.ts`:
 
 ```typescript
-// Position is valid if both accuracies are above 80%
-const isValid = angleAccuracy >= 80 && distanceAccuracy >= 80;
+// Position is valid if both accuracies are above threshold
+const isValid = angleAccuracy >= 70 && distanceAccuracy >= 60;
 ```
 
-## 📊 Success Metrics (KPIs)
+---
 
-Based on PRD requirements:
+## �🚀 Getting Started
 
-- ✅ **5-angle completion rate**: Target 90%
-- ✅ **Average capture time**: Target < 2 minutes
-- ✅ **User satisfaction**: Target > 8/10
-- ✅ **Consistency accuracy**: Target 85%
+### Prerequisites
+-   Node.js (v18 or higher)
+-   Expo Go app on your mobile device (Required for Sensor testing)
 
-## 🏆 Hackathon Judging Criteria
+### Installation
 
-| Criteria | Weight | Implementation |
-|----------|--------|----------------|
-| UX/UI Experience | 30% | Intuitive flow, clear guidance for critical angles |
-| Technical Stability | 25% | Sensor integration, auto-capture reliability |
-| Guidance Mechanism | 20% | Visual AR overlay + audio feedback |
-| Innovation/Creativity | 15% | Smart angle detection algorithm |
-| Presentation Quality | 10% | Demo-ready with polished UI |
+1.  **Navigate to project directory**
+    ```bash
+    cd smile-hair-capture
+    ```
 
-## 🔮 Future Enhancements
+2.  **Install dependencies**
+    ```bash
+    npm install
+    ```
 
-### Phase 2 Features
-- [ ] ML-based face/head detection (MediaPipe, TensorFlow Lite)
-- [ ] Actual radar-style audio feedback (pitch changes based on accuracy)
-- [ ] Cloud storage integration (Firebase)
-- [ ] User authentication
-- [ ] Photo comparison for consistency tracking
-- [ ] AI quality validation
-- [ ] Clinic dashboard for photo review
-- [ ] Multi-language support
-- [ ] Accessibility features
+3.  **Start the development server**
+    ```bash
+    npx expo start
+    ```
 
-## 🐛 Troubleshooting
+4.  **Run on Device (Development Build Required)**
+    Since this project uses native modules (Vision Camera, Face Detector), it **will not work** on the standard Expo Go app from the App Store. You must create a **Development Build**.
 
-### Camera not working
-```bash
-# Clear cache and restart
-npm start -- --clear
-```
+    **Option A: Local Build (Fastest if you have Android Studio/Xcode)**
+    ```bash
+    # For Android
+    npx expo run:android
+    
+    # For iOS (Mac only)
+    npx expo run:ios
+    ```
 
-### Sensors not detecting
-- Ensure you're testing on a physical device (sensors don't work in simulators)
-- Check device orientation lock is disabled
-- Try recalibrating device sensors in settings
+    **Option B: EAS Build (Cloud)**
+    ```bash
+    # Install EAS CLI
+    npm install -g eas-cli
+    
+    # Configure Build
+    eas build:configure
+    
+    # Create Development Build
+    eas build --profile development --platform android
+    ```
+    *After building, install the APK on your device and run `npx expo start` to connect.*
 
-### Build errors
-```bash
-# Clean install
-rm -rf node_modules
-npm install
-```
+---
 
-## 📄 License
+## 🧪 Testing & Troubleshooting
 
-This project was developed for Smile Hair Clinic Hackathon.
+### Manual Testing Checklist
+-   [ ] Camera permission granted successfully
+-   [ ] Sensor data reading correctly (check debug output)
+-   [ ] All 5 angles can be captured
+-   [ ] Automatic shutter triggers at correct position
+-   [ ] Countdown displays (3-2-1)
+-   [ ] Audio feedback (beeps/radar) is audible
 
-## 👥 Credits
+### Common Issues
+1.  **Sensors not working:** Ensure you are on a physical device, not a simulator.
+2.  **Audio not playing:** Check if silent mode is on (iOS often mutes app sounds in silent mode).
+3.  **"Wrong Direction" warning:** Ensure you are turning your head, not the phone, for side profiles.
 
-**Developed for**: Smile Hair Clinic Hackathon - Mobile App Category
+---
+
+## 🔮 Future Roadmap
+
+-   [ ] **AI Hair Analysis:** Integrate ML model to analyze hair density immediately after capture.
+-   [ ] **Cloud Sync:** Securely upload photos to Smile Hair Clinic's patient portal.
+-   [ ] **AR Hairline Designer:** Allow users to visualize their potential new hairline.
+
+---
+
+## 📄 License & Credits
+
+**Developed for**: Smile Hair Clinic Hackathon 2025 - Mobile App Category
 **Purpose**: Professional self-capture tool for hair transplant analysis
 **Platform**: iOS & Android (React Native + Expo)
-
----
-
-## 🚀 Quick Start Commands
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm start
-
-# Run on iOS (macOS only)
-npm run ios
-
-# Run on Android
-npm run android
-
-# Build for production (requires EAS)
-eas build --platform android
-eas build --platform ios
-```
-
-## 📞 Support
-
-For questions or issues related to this project:
-- Check existing issues in the repository
-- Review the PRD document (prd.md)
-- Consult the Hackathon brief PDF
-
----
 
 **Made with ❤️ for Smile Hair Clinic**

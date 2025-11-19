@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,8 +16,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Bu uygulama saç analizi fotoğrafları çekmek için kamera erişimine ihtiyaç duyar.",
-        "NSMotionUsageDescription": "Bu uygulama doğru fotoğraf açısını belirlemek için hareket sensörlerine ihtiyaç duyar."
-      }
+        "NSMotionUsageDescription": "Bu uygulama doğru fotoğraf açısını belirlemek için hareket sensörlerine ihtiyaç duyar.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.damlalper.smilehaircapture"
     },
     "android": {
       "adaptiveIcon": {
@@ -46,6 +48,7 @@
           "enableMicrophonePermission": false
         }
       ],
+      "./plugins/withNewArchitecture",
       "expo-font",
       "expo-asset",
       [

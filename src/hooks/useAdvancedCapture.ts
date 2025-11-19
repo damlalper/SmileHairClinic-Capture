@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FaceFeature } from 'expo-face-detector';
+// import { FaceFeature } from 'expo-face-detector'; // LEGACY: Not used with vision-camera
 import { DeviceMotion } from 'expo-sensors';
+
+// Temporary type definition for FaceFeature (legacy compatibility)
+interface FaceFeature {
+  bounds: { origin: { x: number; y: number }; size: { width: number; height: number } };
+  [key: string]: any;
+}
 import { Dimensions } from 'react-native';
 
 import { estimateHybridHeadPose, HeadPoseEstimate, resetOpticalFlowState } from '../utils/hybridHeadPose';

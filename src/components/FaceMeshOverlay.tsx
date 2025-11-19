@@ -54,6 +54,23 @@ export const FaceMeshOverlay: React.FC<FaceMeshOverlayProps> = ({
 
   const normalizedLandmarks = normalizeLandmarks(landmarks);
 
+  // Calculate bounding box from landmarks
+  const boundingBox = {
+    x: Math.min(landmarks.leftEye.x, landmarks.rightEye.x, landmarks.leftCheek.x, landmarks.rightCheek.x),
+    y: Math.min(landmarks.leftEye.y, landmarks.rightEye.y, landmarks.noseBase.y),
+    width: Math.max(landmarks.leftEye.x, landmarks.rightEye.x, landmarks.leftCheek.x, landmarks.rightCheek.x) -
+           Math.min(landmarks.leftEye.x, landmarks.rightEye.x, landmarks.leftCheek.x, landmarks.rightCheek.x),
+    height: Math.max(landmarks.bottomMouth.y, landmarks.leftCheek.y, landmarks.rightCheek.y) -
+            Math.min(landmarks.leftEye.y, landmarks.rightEye.y, landmarks.noseBase.y)
+  };
+
+  // Calculate face position
+  const centerX = (boundingBox.x + boundingBox.width / 2) * screenWidth;
+  const centerY = (boundingBox.y + boundingBox.height / 2) * screenHeight;
+  const facePosition = {
+    centered: Math.abs(centerX - screenWidth / 2) < 50 && Math.abs(centerY - screenHeight / 2) < 50
+  };
+
   // Renk temaları
   const getColorByScore = (score: number) => {
     if (score >= 90) return '#00FF00'; // Yeşil - Mükemmel

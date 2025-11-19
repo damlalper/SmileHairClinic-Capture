@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera } from 'expo-camera';
-import * as FaceDetector from 'expo-face-detector';
-import { Audio } from 'expo-av';
-import { analyzeFace, FaceAnalysis, FACE_DETECTOR_SETTINGS, getFaceFeedbackMessage } from '../utils/faceDetection';
+// import { Camera } from 'expo-camera'; // LEGACY: Using vision-camera instead
+// import * as FaceDetector from 'expo-face-detector'; // LEGACY: Using vision-camera-face-detector
+// import { Audio } from 'expo-av'; // LEGACY: Using expo-audio
+import { analyzeFace, FaceAnalysis, getFaceFeedbackMessage } from '../utils/faceDetection';
+
+// Type stubs for legacy compatibility
+type AudioSound = any;
 
 /**
 * Gelişmiş yüz algılama ve analiz hook'u
@@ -14,7 +17,7 @@ export const useAdvancedFaceDetection = () => {
   const [isPositionValid, setIsPositionValid] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('Yüz algılanıyor...');
   const [alignmentScore, setAlignmentScore] = useState(0);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [sound, setSound] = useState<AudioSound | null>(null);
   
   const detectionCount = useRef(0);
   const validPositionCount = useRef(0);

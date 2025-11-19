@@ -320,97 +320,116 @@ export class DistanceEstimator {
    */
   private detectDeviceModel(): string {
     // Gerçek uygulamada Device.modelName kullanılır
-    // Şimdilik default
+    // Şimdilik platform bazlı varsayılanlar
     if (Platform.OS === 'ios') {
-      return 'iPhone-14'; // Varsayılan
+      return 'iPhone-14'; // Varsayılan iOS
     } else {
-      return 'Pixel-7'; // Varsayılan
+      // Android için spesifik model yoksa default calibration kullanılacak
+      return 'Generic-Android';
     }
+  }
+
+  /**
+   * GENERIC ANDROID CALIBRATION
+   * Average values for modern Android devices (2020+)
+   */
+  private getGenericAndroidCalibration(): DeviceCalibration {
+    return {
+      focalLengthX: 800, // Average for mid-range/flagship Androids
+      focalLengthY: 800,
+      sensorWidth: 6.0,  // Common 1/2.55" or 1/2" sensors
+      deviceModel: 'Generic Android',
+    };
   }
 
   /**
    * DEFAULT KALİBRASYON (bilinmeyen cihazlar için)
    */
   private getDefaultCalibration(): DeviceCalibration {
-    return {
-      focalLengthX: 830,
-      focalLengthY: 830,
-      sensorWidth: 5.8,
-      deviceModel: 'Unknown',
-    };
-  }
-
-  /**
-   * YÜZ YÜKSEKLİĞİNDEN MESAFE (ek yöntem)
-   * 
-   * Yüz genişliği ölçülemiyor ama yükseklik ölçülebiliyorsa
-   */
-  estimateDistanceFromHeight(faceHeight: number): number {
-    const distance = (HEAD_MEASUREMENTS.height * this.calibration.focalLengthY) / faceHeight;
-    return Math.max(15, Math.min(80, (distance * 0.03) / 10));
-  }
-
-  /**
-   * REFERANS MESAFEYI AYARLA
-   * İlk başarılı çekim sonrası çağrıl
-   */
-  setReferenceDistance(distance: number): void {
-    this.referenceDistance = distance;
-    this.calibrationHistory = [distance];
-  }
-
-  /**
-   * HISTORY SIFIRLA
-   * Yeni kullanıcıya geçerken
-   */
-  resetHistory(): void {
-    this.calibrationHistory = [];
-    this.referenceDistance = null;
-  }
-
-  /**
-   * KALIBRASYONU GÜNCELLEYENDİEVICE (kütüphanelerle)
-   * React Native Device Identity kullanarak otomatik ayar
-   */
-  updateCalibrationFromDevice(deviceModel: string): void {
-    if (DEVICE_CALIBRATIONS[deviceModel]) {
-      this.calibration = DEVICE_CALIBRATIONS[deviceModel];
-    }
-  }
-
-  /**
-   * TUTARLILIĞIN İSTATİSTİKSİNİ AL
-   */
-  getConsistencyStats(): {
-    mean: number;
-    median: number;
-    stdDev: number;
-    min: number;
-    max: number;
-  } {
-    if (this.calibrationHistory.length === 0) {
-      return { mean: 0, median: 0, stdDev: 0, min: 0, max: 0 };
+    if (Platform.OS === 'android') {
+      return this.getGenericAndroidCalibration();
     }
 
-    const sorted = [...this.calibrationHistory].sort((a, b) => a - b);
-    const mean = this.calibrationHistory.reduce((a, b) => a + b, 0) / this.calibrationHistory.length;
-    const median = sorted[Math.floor(sorted.length / 2)];
-    
-    const variance = this.calibrationHistory.reduce(
-      (sum, val) => sum + Math.pow(val - mean, 2),
-      0
-    ) / this.calibrationHistory.length;
-    
-    const stdDev = Math.sqrt(variance);
+    // Default for iOS or others
+  return {
+    focalLengthX: 830,
+    focalLengthY: 830,
+    sensorWidth: 5.8,
+    deviceModel: 'Unknown',
+  };
+}
 
-    return {
-      mean: Math.round(mean * 10) / 10,
-      median: Math.round(median * 10) / 10,
-      stdDev: Math.round(stdDev * 10) / 10,
-      min: Math.min(...this.calibrationHistory),
-      max: Math.max(...this.calibrationHistory),
-    };
+/**
+ * YÜZ YÜKSEKLİĞİNDEN MESAFE (ek yöntem)
+ * 
+ * Yüz genişliği ölçülemiyor ama yükseklik ölçülebiliyorsa
+ */
+estimateDistanceFromHeight(faceHeight: number): number {
+  const distance = (HEAD_MEASUREMENTS.height * this.calibration.focalLengthY) / faceHeight;
+  return Math.max(15, Math.min(80, (distance * 0.03) / 10));
+}
+
+/**
+ * REFERANS MESAFEYI AYARLA
+ * İlk başarılı çekim sonrası çağrıl
+ */
+setReferenceDistance(distance: number): void {
+  this.referenceDistance = distance;
+  this.calibrationHistory = [distance];
+}
+
+/**
+ * HISTORY SIFIRLA
+ * Yeni kullanıcıya geçerken
+ */
+resetHistory(): void {
+  this.calibrationHistory = [];
+  this.referenceDistance = null;
+}
+
+/**
+ * KALIBRASYONU GÜNCELLEYENDİEVICE (kütüphanelerle)
+ * React Native Device Identity kullanarak otomatik ayar
+ */
+updateCalibrationFromDevice(deviceModel: string): void {
+  if(DEVICE_CALIBRATIONS[deviceModel]) {
+    this.calibration = DEVICE_CALIBRATIONS[deviceModel];
   }
+}
+
+/**
+ * TUTARLILIĞIN İSTATİSTİKSİNİ AL
+ */
+getConsistencyStats(): {
+  mean: number;
+  median: number;
+  stdDev: number;
+  min: number;
+  max: number;
+} {
+  if (this.calibrationHistory.length === 0) {
+    return { mean: 0, median: 0, stdDev: 0, min: 0, max: 0 };
+  }
+
+  const sorted = [...this.calibrationHistory].sort((a, b) => a - b);
+  const mean = this.calibrationHistory.reduce((a, b) => a + b, 0) / this.calibrationHistory.length;
+  const median = sorted[Math.floor(sorted.length / 2)];
+
+  const variance = this.calibrationHistory.reduce(
+    (sum, val) => sum + Math.pow(val - mean, 2),
+    0
+  ) / this.calibrationHistory.length;
+
+  const stdDev = Math.sqrt(variance);
+
+  return {
+    mean: Math.round(mean * 10) / 10,
+    median: Math.round(median * 10) / 10,
+    stdDev: Math.round(stdDev * 10) / 10,
+    min: Math.min(...this.calibrationHistory),
+    max: Math.max(...this.calibrationHistory),
+  };
+}
 }
 
 // Export types

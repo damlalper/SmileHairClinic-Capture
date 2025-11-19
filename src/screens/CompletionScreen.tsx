@@ -17,10 +17,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList, CaptureAngle } from '../types';
+import { RootStackParamList, CaptureAngle, CapturedPhoto } from '../types';
 import { COLORS, ANGLE_CONFIGS } from '../constants/angles';
 import { usePhotos } from '../context/PhotoContext';
-import * as FileSystem from 'expo-file-system';
+import { Paths, File } from 'expo-file-system';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const THUMBNAIL_SIZE = (SCREEN_WIDTH - 72) / 3;
@@ -95,9 +95,9 @@ export default function CompletionScreen({
         exportDate: new Date().toISOString(),
         totalPhotos: photos.length,
         deviceModel: Platform.OS,
-        photos: photos.map((photo) => ({
+        photos: photos.map((photo: CapturedPhoto) => ({
           angle: photo.angle,
-          angleName: ANGLE_CONFIGS[photo.angle].title,
+          angleName: ANGLE_CONFIGS[photo.angle as CaptureAngle].title,
           timestamp: photo.timestamp,
           metadata: {
             pitch: photo.metadata?.pitch || 0,
@@ -118,14 +118,14 @@ export default function CompletionScreen({
 
       // Save JSON to file
       const jsonString = JSON.stringify(qualityReport, null, 2);
-      const fileUri = `${FileSystem.documentDirectory}smile_hair_quality_report_${Date.now()}.json`;
+      const file = new File(Paths.document, `smile_hair_quality_report_${Date.now()}.json`);
 
-      await FileSystem.writeAsStringAsync(fileUri, jsonString);
+      await file.write(jsonString);
 
       // Share the file
       await Share.share({
         message: 'Smile Hair Clinic Quality Report',
-        url: fileUri,
+        url: file.uri,
         title: 'Quality Report JSON',
       });
 
@@ -217,7 +217,7 @@ export default function CompletionScreen({
             Tekrar çekmek için fotoğrafa tıklayın
           </Text>
           <View style={styles.photosGrid}>
-            {photos.map((photo, index) => (
+            {photos.map((photo: CapturedPhoto, index: number) => (
               <TouchableOpacity
                 key={photo.angle}
                 style={styles.photoItem}
@@ -230,7 +230,7 @@ export default function CompletionScreen({
                 />
                 <View style={styles.photoLabel}>
                   <Text style={styles.photoLabelText} numberOfLines={2}>
-                    {ANGLE_CONFIGS[photo.angle].title}
+                    {ANGLE_CONFIGS[photo.angle as CaptureAngle].title}
                   </Text>
                 </View>
                 <View style={styles.photoNumber}>

@@ -11,8 +11,14 @@
  * Dokümantasyon: advanced-capture-try.md
  */
 
-import { FaceFeature } from 'expo-face-detector';
+// import { FaceFeature } from 'expo-face-detector'; // LEGACY: Using vision-camera-face-detector
 import { OPTICAL_FLOW } from '../constants/angles';
+
+// Type stub for legacy compatibility
+interface FaceFeature {
+  bounds: { origin: { x: number; y: number }; size: { width: number; height: number } };
+  [key: string]: any;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // TİPLER VE ARAYÜZLER

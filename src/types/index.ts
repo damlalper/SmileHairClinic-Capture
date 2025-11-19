@@ -26,6 +26,7 @@ export interface AngleConfig {
   instructions: string;
   phoneAngle: {
     pitch: number; // Up/down tilt (degrees)
+    pitchMax?: number; // Optional: Max pitch for range validation
     roll: number; // Left/right tilt (degrees)
     yaw?: number; // Rotation around vertical axis (degrees) - optional
     tolerance: number; // Acceptable deviation
@@ -39,6 +40,12 @@ export interface AngleConfig {
   centeringTolerance?: number; // Optional: ±% tolerance for centering
   stabilityDuration?: number; // Optional: ms duration for conditions to be stable
   iouThreshold?: number;      // Optional: 0-1 IoU match threshold
+  regionDetection?: {
+    required: boolean;
+    targetRegion: string;
+    minConfidence: number;
+    centerAreaThreshold: number;
+  };
 }
 
 // Captured photo data
@@ -50,6 +57,16 @@ export interface CapturedPhoto {
     pitch: number;
     roll: number;
     distance: number;
+    yaw?: number;
+    pitchDeviation?: number;
+    rollDeviation?: number;
+    captureConfidence?: number;
+    validationState?: any;
+    headPose?: {
+      pitch: number;
+      roll: number;
+      yaw: number;
+    };
   };
 }
 
@@ -73,8 +90,9 @@ export type RootStackParamList = {
   Welcome: undefined;
   Instructions: { angle: CaptureAngle };
   Camera: { angle: CaptureAngle };
-  Review: { photo: CapturedPhoto };
-  Completion: undefined;
+  PhotoPreview: { photo: CapturedPhoto }; // ✅ New: Photo preview screen
+  Review: { photo?: CapturedPhoto }; // Made optional for final review
+  Completion: { photos: CapturedPhoto[] };
   FrontFaceCapture: undefined;
   Left45Capture: undefined;
   Right45Capture: undefined;

@@ -83,34 +83,74 @@ function validateWithFaceDetection(
   // Position is valid if all criteria met
   const isValid = angleAccuracy >= 70 && distanceAccuracy >= 60 && yawInRange && pitchInRange && rollInRange;
 
-  // Generate feedback message
+  // ✅ ENHANCED: Check face centering (directional feedback)
+  const SCREEN_CENTER_X = 0.5; // Normalized center (0-1)
+  const SCREEN_CENTER_Y = 0.5;
+  const CENTERING_THRESHOLD = 0.1; // ±10% from center
+
+  const faceCenterX = faceAnalysis.facePosition.x + faceAnalysis.facePosition.width / 2;
+  const faceCenterY = faceAnalysis.facePosition.y + faceAnalysis.facePosition.height / 2;
+
+  // Normalize to 0-1 range (assuming face position is already normalized)
+  const isCenteredX = Math.abs(faceCenterX - SCREEN_CENTER_X) < CENTERING_THRESHOLD;
+  const isCenteredY = Math.abs(faceCenterY - SCREEN_CENTER_Y) < CENTERING_THRESHOLD;
+
+  // Generate feedback message with directional guidance
   let feedback = '';
   if (!isValid) {
-    if (!yawInRange) {
+    // Priority 1: Face centering (most important for proper framing)
+    if (!isCenteredX || !isCenteredY) {
+      if (faceCenterX < SCREEN_CENTER_X - CENTERING_THRESHOLD) {
+        feedback = 'Sağa hareket edin →';
+      } else if (faceCenterX > SCREEN_CENTER_X + CENTERING_THRESHOLD) {
+        feedback = 'Sola hareket edin ←';
+      } else if (faceCenterY < SCREEN_CENTER_Y - CENTERING_THRESHOLD) {
+        feedback = 'Aşağı hareket edin ↓';
+      } else if (faceCenterY > SCREEN_CENTER_Y + CENTERING_THRESHOLD) {
+        feedback = 'Yukarı hareket edin ↑';
+      }
+    }
+    // Priority 2: Face angle (head rotation)
+    else if (!yawInRange) {
       if (faceYaw < minYaw) {
         feedback = targetConfig.id === 'RIGHT_45'
           ? 'Başınızı daha fazla SAĞA çevirin'
-          : 'Başınızı daha fazla SOLA çevirin';
+          : targetConfig.id === 'LEFT_45'
+          ? 'Başınızı daha fazla SOLA çevirin'
+          : 'Kameraya tam karşı bakın';
       } else {
         feedback = targetConfig.id === 'RIGHT_45'
           ? 'Başınızı biraz geri çevirin (çok fazla döndü)'
-          : 'Başınızı biraz geri çevirin (çok fazla döndü)';
+          : targetConfig.id === 'LEFT_45'
+          ? 'Başınızı biraz geri çevirin (çok fazla döndü)'
+          : 'Başınızı düzeltin';
       }
-    } else if (!pitchInRange) {
-      feedback = facePitch > maxPitch ? 'Başınızı biraz kaldırın' : 'Başınızı biraz indirin';
-    } else if (phoneAngleAccuracy < 60) {
+    }
+    // Priority 3: Face pitch (up/down tilt)
+    else if (!pitchInRange) {
+      feedback = facePitch > maxPitch ? 'Başınızı biraz kaldırın ↑' : 'Başınızı biraz indirin ↓';
+    }
+    // Priority 4: Phone angle
+    else if (phoneAngleAccuracy < 60) {
       if (pitchDiff > phoneAngle.tolerance / 2) {
         feedback = currentSensor.pitch > phoneAngle.pitch
           ? 'Telefonu biraz aşağı eğin'
           : 'Telefonu biraz yukarı eğin';
       }
-    } else if (distanceAccuracy < 60) {
+      if (rollDiff > phoneAngle.tolerance / 2) {
+        feedback = currentSensor.roll > phoneAngle.roll
+          ? 'Telefonu sola eğin ←'
+          : 'Telefonu sağa eğin →';
+      }
+    }
+    // Priority 5: Distance
+    else if (distanceAccuracy < 60) {
       feedback = estimatedDistance < distanceMid
-        ? 'Telefonu biraz uzaklaştırın'
-        : 'Telefonu biraz yaklaştırın';
+        ? 'Biraz uzaklaşın 🔙'
+        : 'Biraz yaklaşın 🔜';
     }
   } else {
-    feedback = 'Mükemmel! Pozisyon doğru.';
+    feedback = 'Mükemmel! Pozisyon doğru. ✓';
   }
 
   return {

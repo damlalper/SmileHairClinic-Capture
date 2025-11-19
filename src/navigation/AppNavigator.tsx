@@ -7,6 +7,8 @@ import { PhotoProvider } from '../context/PhotoContext';
 // Import screens
 import WelcomeScreen from '../screens/WelcomeScreen';
 import InstructionsScreen from '../screens/InstructionsScreen';
+import CameraScreen from '../screens/CameraScreen';
+import PhotoPreviewScreen from '../screens/PhotoPreviewScreen';
 import ReviewScreen from '../screens/ReviewScreen';
 import CompletionScreen from '../screens/CompletionScreen';
 import FrontFaceCaptureScreen from '../screens/FrontFaceCaptureScreen';
@@ -30,6 +32,8 @@ export default function AppNavigator() {
         >
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Instructions" component={InstructionsScreen} />
+          <Stack.Screen name="Camera" component={CameraScreen} />
+          <Stack.Screen name="PhotoPreview" component={PhotoPreviewScreen} />
           <Stack.Screen name="FrontFaceCapture" component={FrontFaceCaptureScreen} />
           <Stack.Screen name="Left45Capture" component={Left45CaptureScreen} />
           <Stack.Screen name="Right45Capture" component={Right45CaptureScreen} />

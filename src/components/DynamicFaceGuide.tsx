@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { CaptureAngle } from '../types';
 
 interface Props {
   width?: number;
@@ -10,6 +11,7 @@ interface Props {
   accuracy: number;
   isValid: boolean;
   countdown?: number | null;
+  angle?: CaptureAngle; // ✅ NEW: To show angle-specific silhouettes
 }
 
 export const DynamicFaceGuide: React.FC<Props> = ({
@@ -21,16 +23,52 @@ export const DynamicFaceGuide: React.FC<Props> = ({
   accuracy,
   isValid,
   countdown = null,
+  angle,
 }) => {
   const borderColor = isValid ? '#28a745' : accuracy > 50 ? '#ff9800' : '#e53935';
+
+  // ✅ Determine silhouette shape based on angle
+  const getSilhouetteHint = () => {
+    switch (angle) {
+      case CaptureAngle.FRONT:
+        return '👤 Tam Yüz';
+      case CaptureAngle.RIGHT_45:
+        return '🌗 Sağ Profil →';
+      case CaptureAngle.LEFT_45:
+        return '🌓 ← Sol Profil';
+      case CaptureAngle.VERTEX:
+        return '⬆️ Tepe';
+      case CaptureAngle.BACK_DONOR:
+        return '⬇️ Ense';
+      default:
+        return '';
+    }
+  };
 
   return (
     <View style={[styles.container, { width, height }] as any} pointerEvents="none">
       <View style={[styles.frame, { borderColor }]}>
+        {/* ✅ CROSSHAIR - Center alignment guide */}
+        <View style={styles.crosshair}>
+          {/* Horizontal line */}
+          <View style={[styles.crosshairLine, styles.crosshairHorizontal, { backgroundColor: borderColor }]} />
+          {/* Vertical line */}
+          <View style={[styles.crosshairLine, styles.crosshairVertical, { backgroundColor: borderColor }]} />
+          {/* Center dot */}
+          <View style={[styles.crosshairDot, { backgroundColor: borderColor }]} />
+        </View>
+
         {/* Dynamic arrows for left/right centering */}
         <View style={styles.arrowsRow}>
           <Text style={styles.arrow}>{roll < -5 ? '⬅️' : roll > 5 ? '➡️' : '⬆️'}</Text>
         </View>
+
+        {/* ✅ Silhouette Hint - Shows expected angle */}
+        {angle && (
+          <View style={styles.silhouetteHint}>
+            <Text style={styles.silhouetteText}>{getSilhouetteHint()}</Text>
+          </View>
+        )}
 
         {/* Angle readouts */}
         <View style={styles.angleContainer}>
@@ -70,6 +108,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
+  // ✅ CROSSHAIR STYLES
+  crosshair: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  crosshairLine: {
+    position: 'absolute',
+    opacity: 0.6,
+  },
+  crosshairHorizontal: {
+    width: 40,
+    height: 2,
+  },
+  crosshairVertical: {
+    width: 2,
+    height: 40,
+  },
+  crosshairDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.8,
+  },
   arrowsRow: {
     position: 'absolute',
     top: 12,
@@ -77,6 +141,22 @@ const styles = StyleSheet.create({
   },
   arrow: {
     fontSize: 28,
+  },
+  // ✅ SILHOUETTE HINT STYLES
+  silhouetteHint: {
+    position: 'absolute',
+    top: 50,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  silhouetteText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   angleContainer: {
     position: 'absolute',

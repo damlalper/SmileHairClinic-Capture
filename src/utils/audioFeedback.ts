@@ -1,6 +1,6 @@
 /**
  * AUDIO FEEDBACK SISTEMI
- * 
+ *
  * Amaç:
  * - Frekans-adaptif tonlar (0-100% accuracy → 200-800Hz)
  * - Geri sayım sesleri (3-2-1)
@@ -234,22 +234,37 @@ export class AudioFeedback implements AudioFeedbackSystem {
   }
 
   /**
-   * TON OYNAT - Web Audio API
+   * TON OYNAT - expo-audio ile gerçek ses dosyası
    */
   private async playTone(params: ToneParams): Promise<void> {
     try {
-      // React Native'de Web Audio yok, fallback olarak yapabileceğimiz bir şey var mı?
-      // expo-av ile dosya oynatmak daha güvenilir
-      // Burada sadece mock/simulation yapıyoruz
-
-      // Gerçek implementasyon: Önceden kaydedilmiş WAV dosyaları kullan
-      // veya Firebase Cloud Storage'dan indir
-
-      // Şimdilik: Haptics + visual feedback yeterli
-      this.toneGenerator.playTone(params.frequency, params.duration, params.volume);
+      // Use Web Audio API for tone generation on web
+      if (Platform.OS === 'web') {
+        this.toneGenerator.playTone(params.frequency, params.duration, params.volume);
+      } else {
+        // For native platforms, use haptic feedback instead of audio for now
+        // TODO: Implement proper audio playback with expo-audio v2 API
+        if (this.config.enableHaptics) {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      }
     } catch (error) {
       console.warn('Tone playback failed:', error);
     }
+  }
+
+  /**
+   * Frekansa göre playback rate hesapla
+   * 500Hz = 1.0x (normal)
+   * 200Hz = 0.5x (yavaş/düşük)
+   * 800Hz = 1.6x (hızlı/yüksek)
+   */
+  private calculatePlaybackRate(frequency: number): number {
+    // Base frequency: 500Hz
+    const baseFrequency = 500;
+    const rate = frequency / baseFrequency;
+    // Clamp between 0.5 and 2.0 (expo-audio limits)
+    return Math.max(0.5, Math.min(2.0, rate));
   }
 
   /**
@@ -257,6 +272,7 @@ export class AudioFeedback implements AudioFeedbackSystem {
    */
   async stop(): Promise<void> {
     this.isPlaying = false;
+    // Sound playback is handled per-tone, no persistent state to stop
   }
 
   /**
@@ -338,9 +354,9 @@ export function getAudioFeedback(config?: Partial<AudioConfig>): AudioFeedback {
   return audioFeedbackInstance;
 }
 
-export function resetAudioFeedback(): void {
+export async function resetAudioFeedback(): Promise<void> {
   if (audioFeedbackInstance) {
-    audioFeedbackInstance.stop();
+    await audioFeedbackInstance.stop();
     audioFeedbackInstance = null;
   }
 }
