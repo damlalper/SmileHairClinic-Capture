@@ -41,9 +41,9 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'Left45Capture'>;
 
 const Left45CaptureScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { addPhoto } = useContext(PhotoContext);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const cameraRef = useRef<CameraView>(null);
+  const device = useCameraDevice('front');
+  const [hasPermission, setHasPermission] = useState(false);
+  const cameraRef = useRef<Camera>(null);
   const [wrongDirectionWarned, setWrongDirectionWarned] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════════
@@ -87,7 +87,7 @@ const Left45CaptureScreen = () => {
 
   useEffect(() => {
     (async () => {
-      const { status } = await CameraView.requestCameraPermissionsAsync();
+      const status = await Camera.requestCameraPermission();
       setHasPermission(status === 'granted');
     })();
   }, []);
@@ -97,61 +97,63 @@ const Left45CaptureScreen = () => {
   // ═══════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (isReadyToCapture && cameraRef.current) {
-      // ✅ Haptic feedback on capture trigger
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-        Vibration.vibrate(100);
-      });
+      const capturePhoto = async () => {
+        try {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
+            Vibration.vibrate(100);
+          });
 
-      cameraRef.current.takePictureAsync({
-        quality: 0.9,
-        exif: false,
-      }).then(photo => {
-        // ✅ Success haptic feedback
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {
-          Vibration.vibrate([0, 50, 100, 50]);
-        });
+          const photo = await cameraRef.current!.takePhoto({
+            flash: 'off',
+          });
 
-        // ✅ FIX: Distance calculation with profile correction
-        const distance = headPose?.bounds
-          ? estimateDistanceForProfile(headPose.bounds.width, headPose.bounds.height)
-          : 0;
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {
+            Vibration.vibrate([0, 50, 100, 50]);
+          });
 
-        addPhoto({
-          angle: CaptureAngle.LEFT_45,
-          uri: photo.uri,
-          timestamp: Date.now(),
-          metadata: {
-            pitch: phoneOrientation?.pitch ?? 0,
-            roll: phoneOrientation?.roll ?? 0,
-            distance,
-            headPose: {
-              pitch: headPose?.pitch ?? 0,
-              roll: headPose?.roll ?? 0,
-              yaw: headPose?.yaw ?? 0,
+          const distance = headPose?.bounds
+            ? estimateDistanceForProfile(headPose.bounds.width, headPose.bounds.height)
+            : 40;
+
+          navigation.navigate('Review', {
+            photo: {
+              angle: CaptureAngle.LEFT_45,
+              uri: `file://${photo.path}`,
+              timestamp: Date.now(),
+              metadata: {
+                pitch: phoneOrientation?.pitch ?? 0,
+                roll: phoneOrientation?.roll ?? 0,
+                distance,
+              },
             },
-            validationState,
-          },
-        });
-        navigation.navigate('VertexCapture');
-      }).catch(error => {
-        console.error('Failed to capture photo:', error);
-        // ✅ Error haptic feedback
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {
-          Vibration.vibrate([0, 100, 50, 100]);
-        });
-        reset();
-      });
+          });
+        } catch (error) {
+          console.error('Failed to capture photo:', error);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {
+            Vibration.vibrate([0, 100, 50, 100]);
+          });
+          reset();
+        }
+      };
+
+      capturePhoto();
     }
-  }, [isReadyToCapture, addPhoto, navigation, headPose, phoneOrientation, validationState, reset]);
+  }, [isReadyToCapture, navigation, headPose, phoneOrientation, reset]);
 
   // ═══════════════════════════════════════════════════════════════════
   // FACE DETECTION HANDLER
   // ═══════════════════════════════════════════════════════════════════
-  const handleFacesDetected = useCallback((result: FaceDetectionResult) => {
-    if (result.faces.length > 0) {
-      processFace(result.faces[0]);
+  const handleFacesDetected = useCallback((faces: Face[]) => {
+    if (faces && faces.length > 0) {
+      processFace(faces[0]);
     }
   }, [processFace]);
+
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+    const faces = scanFaces(frame);
+    runOnJS(handleFacesDetected)(faces);
+  }, [handleFacesDetected]);
 
   // ═══════════════════════════════════════════════════════════════════
   // DISTANCE ESTIMATION - Profile Corrected for 45° Angle
@@ -210,23 +212,32 @@ const Left45CaptureScreen = () => {
   // ═══════════════════════════════════════════════════════════════════
   // MAIN RENDER
   // ═══════════════════════════════════════════════════════════════════
+  if (!device) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading camera...</Text>
+      </View>
+    );
+  }
+
+  if (!hasPermission) {
+    return (
+      <View style={styles.container}>
+        <Text>Camera permission required</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* CAMERA VIEW - Optimized Settings */}
-      <CameraView
+      {/* CAMERA VIEW - Vision Camera */}
+      <Camera
         style={styles.camera}
-        facing="front"
+        device={device}
+        isActive={true}
         ref={cameraRef}
-        onFacesDetected={handleFacesDetected}
-        faceDetectorSettings={{
-          mode: 'accurate',
-          detectLandmarks: 'all',
-          runClassifications: 'all',
-          minDetectionInterval: 100,
-          tracking: true,
-        }}
-        enableTorch={false}
-        zoom={0}
+        photo={true}
+        frameProcessor={frameProcessor}
       />
 
       {/* OVERLAY CONTAINER */}
